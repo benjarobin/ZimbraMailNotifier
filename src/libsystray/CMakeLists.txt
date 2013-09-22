@@ -11,6 +11,7 @@ include_directories(${GTK2_INCLUDE_DIRS})
 link_directories(${GTK2_LIBRARY_DIRS})
 # Add other flags to the compiler
 add_definitions(${GTK2_CFLAGS_OTHER})
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wunused -Wshadow -Wcast-qual -fvisibility=hidden")
 # Add sources files
 aux_source_directory(. SRC_LIST)
 add_library(${PROJECT_NAME} SHARED ${SRC_LIST})
