@@ -96,6 +96,18 @@ com.zimbra.controller.Service = function() {
     this._loadDefault();
     this._callbackList = [];
     this._util.addObserver(this, com.zimbra.constant.OBSERVER.PREF_SAVED);
+
+    this._systray = null;
+    if (this._prefs.isSystrayEnabled()) {
+        this._systray = new com.zimbra.service.Systray(this);
+        if (this._systray.init()) {
+            this.addCallBackRefresh(this._systray);
+        }
+        else {
+            this._systray.unload();
+            this._systray = null;
+        }
+    }
 };
 
 /**
@@ -189,6 +201,10 @@ com.zimbra.controller.Service.prototype.initialize = function(parent) {
  */
 com.zimbra.controller.Service.prototype.release = function() {
     this._util.removeObserver(this, com.zimbra.constant.OBSERVER.PREF_SAVED);
+    if (this._systray !== null) {
+        this._systray.unload();
+        this._systray = null;
+    }
     this._loadDefault();
     this._callbackList = [];
 };

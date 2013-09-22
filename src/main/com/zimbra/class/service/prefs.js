@@ -64,6 +64,7 @@ com.zimbra.service.Prefs = function() {
 com.zimbra.service.Prefs.prototype.PREF = {
     CURRENT_VERSION : "extensions.zimbra_mail_notifier.currentVersion",
     ACCESS_STATUSBAR : "extensions.zimbra_mail_notifier.accessStatusBar",
+    SYSTRAY_ENABLED : "extensions.zimbra_mail_notifier.systryEnabled",
     AUTOCONNECT : "extensions.zimbra_mail_notifier.autoConnect",
     SYSTEM_NOTIFICATION_ENABLED : "extensions.zimbra_mail_notifier.systemNotificationEnabled",
     SOUND_ENABLED : "extensions.zimbra_mail_notifier.soundEnabled",
@@ -101,6 +102,7 @@ com.zimbra.service.Prefs.prototype.load = function() {
     this.pref_system_notification_enabled = this._getPref(this.PREF.SYSTEM_NOTIFICATION_ENABLED);
     this.pref_sound_enabled = this._getPref(this.PREF.SOUND_ENABLED);
     this.pref_access_statusBar = this._getPref(this.PREF.ACCESS_STATUSBAR);
+    this.pref_systray_enabled = this._getPref(this.PREF.SYSTRAY_ENABLED);
     // calendar
     this.pref_calendar_enabled = this._getPref(this.PREF.CALENDAR_ENABLED);
     this.pref_calendar_period_displayed = this._getPref(this.PREF.CALENDAR_PERIOD_DISPLAYED);
@@ -144,6 +146,7 @@ com.zimbra.service.Prefs.prototype.initDefaultValuesIfNecessary = function() {
     this._addPref(this.PREF.SYSTEM_NOTIFICATION_ENABLED, true);
     this._addPref(this.PREF.SOUND_ENABLED, true);
     this._addPref(this.PREF.ACCESS_STATUSBAR, true);
+    this._addPref(this.PREF.SYSTRAY_ENABLED, true);
     // calendar
     this._addPref(this.PREF.CALENDAR_ENABLED, false);
     this._addPref(this.PREF.CALENDAR_PERIOD_DISPLAYED, 14);
@@ -184,6 +187,7 @@ com.zimbra.service.Prefs.prototype.save = function() {
     this._setPref(this.PREF.SYSTEM_NOTIFICATION_ENABLED, this.pref_system_notification_enabled);
     this._setPref(this.PREF.SOUND_ENABLED, this.pref_sound_enabled);
     this._setPref(this.PREF.ACCESS_STATUSBAR, this.pref_access_statusBar);
+    this._setPref(this.PREF.SYSTRAY_ENABLED, this.pref_systray_enabled);
     // calendar
     this._setPref(this.PREF.CALENDAR_ENABLED, this.pref_calendar_enabled);
     this._setPref(this.PREF.CALENDAR_PERIOD_DISPLAYED, this.pref_calendar_period_displayed);
@@ -356,6 +360,27 @@ com.zimbra.service.Prefs.prototype.isStatusBarEnabled = function() {
  */
 com.zimbra.service.Prefs.prototype.setIsStatusBarEnabled = function(enabled) {
     this.pref_access_statusBar = enabled;
+};
+
+/**
+ * indicate if systray is enabled
+ *
+ * @this {Prefs}
+ * @return {Boolean} true if enabled
+ */
+com.zimbra.service.Prefs.prototype.isSystrayEnabled = function() {
+    return this.pref_systray_enabled;
+};
+
+/**
+ * set if systray is enabled
+ *
+ * @this {Prefs}
+ * @param {Boolean}
+ *            enabled true to enabled
+ */
+com.zimbra.service.Prefs.prototype.setSystrayEnabled = function(enabled) {
+    this.pref_systray_enabled = enabled;
 };
 
 /**

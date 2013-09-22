@@ -4,4 +4,4 @@
 .metadata
 target/*
 */.DS_Store
-
+src/libsystray/CMakeLists.txt.user
