@@ -38,15 +38,33 @@
 
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
+#include <stdio.h>
+#include <string.h>
+#include <malloc.h>
 
-#include "img/iconnewmail.h"
 #include "img/iconnomail.h"
 #include "img/iconnotconnected.h"
 
+
+/********************** macro ***********************************/
+
+#define UNUSED(v) (void)(v)
+
+/********************** static var ***********************************/
+
 static GtkStatusIcon *statusIcon = NULL;
-static GdkPixbuf *bufIconNewMail = NULL;
-static GdkPixbuf *bufIconNoMail = NULL;
+static unsigned int previousNbUnreadMail = 0;
+static GdkPixbuf *bufIconUnreadMail = NULL;
+static GdkPixbuf *bufIconConnected = NULL;
 static GdkPixbuf *bufIconNotConnected = NULL;
+
+/****************** static function **********************************/
+
+static cairo_surface_t* gdkPixbuf2CairoSurface(const GdkPixbuf *pixbuf);
+static GdkPixbuf* cairoSurface2gdkPixbuf(cairo_surface_t *surface);
+static void drawNumberBottomLeft(cairo_surface_t *surface, unsigned int v);
+
+/****************** public function **********************************/
 
 uint32_t ZIMBRA_SYSTRAY_init(void)
 {
@@ -56,13 +74,9 @@ uint32_t ZIMBRA_SYSTRAY_init(void)
         statusIcon = gtk_status_icon_new();
     }
     // Load images from memory
-    if (bufIconNewMail == NULL)
+    if (bufIconConnected == NULL)
     {
-        bufIconNewMail = gdk_pixbuf_new_from_inline (-1, iconnewmail_inline, FALSE, NULL);
-    }
-    if (bufIconNoMail == NULL)
-    {
-        bufIconNoMail = gdk_pixbuf_new_from_inline (-1, iconnomail_inline, FALSE, NULL);
+        bufIconConnected = gdk_pixbuf_new_from_inline (-1, iconnomail_inline, FALSE, NULL);
     }
     if (bufIconNotConnected == NULL)
     {
@@ -87,20 +101,17 @@ uint32_t ZIMBRA_SYSTRAY_unload(void)
         ret++;
     }
 
-    if (bufIconNewMail)
+    previousNbUnreadMail = 0;
+    if (bufIconUnreadMail)
     {
-        g_object_unref(bufIconNewMail);
-        bufIconNewMail = NULL;
-    }
-    else
-    {
-        ret++;
+        g_object_unref(bufIconUnreadMail);
+        bufIconUnreadMail = NULL;
     }
 
-    if (bufIconNoMail)
+    if (bufIconConnected)
     {
-        g_object_unref(bufIconNoMail);
-        bufIconNoMail = NULL;
+        g_object_unref(bufIconConnected);
+        bufIconConnected = NULL;
     }
     else
     {
@@ -127,9 +138,9 @@ void ZIMBRA_SYSTRAY_setConnected(uint32_t connected)
         if (connected)
         {
             gtk_status_icon_set_tooltip_text(statusIcon, "Connecté");
-            if (bufIconNoMail)
+            if (bufIconConnected)
             {
-                gtk_status_icon_set_from_pixbuf(statusIcon, bufIconNoMail);
+                gtk_status_icon_set_from_pixbuf(statusIcon, bufIconConnected);
             }
         }
         else
@@ -147,7 +158,7 @@ void ZIMBRA_SYSTRAY_setConnected(uint32_t connected)
 
 void ZIMBRA_SYSTRAY_setUnreadMail(uint32_t nb)
 {
-    char buf[128];
+    char buf[64];
     if (nb > 1)
     {
         sprintf(buf, "%u messages non lus", nb);
@@ -162,17 +173,136 @@ void ZIMBRA_SYSTRAY_setUnreadMail(uint32_t nb)
     if (nb == 0)
     {
         gtk_status_icon_set_blinking(statusIcon, 0);
-        if (bufIconNoMail)
+        if (bufIconConnected)
         {
-            gtk_status_icon_set_from_pixbuf(statusIcon, bufIconNoMail);
+            gtk_status_icon_set_from_pixbuf(statusIcon, bufIconConnected);
         }
     }
     else
     {
         gtk_status_icon_set_blinking(statusIcon, 1);
-        if (bufIconNewMail)
+        if (bufIconUnreadMail && previousNbUnreadMail != nb)
         {
-            gtk_status_icon_set_from_pixbuf(statusIcon, bufIconNewMail);
+            g_object_unref(bufIconUnreadMail);
+            bufIconUnreadMail = NULL;
+        }
+        if (bufIconUnreadMail == NULL)
+        {
+            cairo_surface_t *surface = gdkPixbuf2CairoSurface(bufIconConnected);
+            drawNumberBottomLeft(surface, nb);
+            bufIconUnreadMail = cairoSurface2gdkPixbuf(surface);
+            cairo_surface_destroy(surface);
+        }
+        if (bufIconUnreadMail)
+        {
+            gtk_status_icon_set_from_pixbuf(statusIcon, bufIconUnreadMail);
         }
     }
+}
+
+/****************** static function **********************************/
+
+static cairo_surface_t* gdkPixbuf2CairoSurface(const GdkPixbuf *pixbuf)
+{
+    cairo_surface_t *surface = NULL;
+    cairo_t *cr;
+
+    g_assert(pixbuf != NULL);
+    g_assert(gdk_pixbuf_get_colorspace(pixbuf) == GDK_COLORSPACE_RGB);
+    g_assert(gdk_pixbuf_get_bits_per_sample(pixbuf) == 8);
+    g_assert(gdk_pixbuf_get_has_alpha(pixbuf));
+    g_assert(gdk_pixbuf_get_n_channels(pixbuf) == 4);
+
+    surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, gdk_pixbuf_get_width(pixbuf),
+                                         gdk_pixbuf_get_height(pixbuf));
+    if (surface)
+    {
+        cr = cairo_create(surface);
+        gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
+        cairo_paint(cr);
+        cairo_destroy(cr);
+    }
+    return surface;
+}
+
+static void gdkPixbufFree(guchar *pixels, gpointer data)
+{
+    UNUSED(data);
+
+    if (pixels != NULL)
+    {
+        free(pixels);
+    }
+}
+
+// function only valid for little endian processors...
+static inline u_int32_t cairoPixel2gdkPixel(u_int32_t p)
+{
+    return ( p & 0xFF00FF00)        |
+           ((p & 0x00FF0000) >> 16) |
+           ((p & 0x000000FF) << 16);
+}
+
+static GdkPixbuf* cairoSurface2gdkPixbuf(cairo_surface_t *surface)
+{
+    const guchar *dst;
+    u_int32_t *src, *p;
+    int rstride, w, h, i, size;
+
+    g_assert(surface != NULL);
+
+    // read info from cairo surface
+    rstride = cairo_image_surface_get_stride(surface);
+    w = cairo_image_surface_get_width(surface);
+    h = cairo_image_surface_get_height(surface);
+    src = (u_int32_t*)cairo_image_surface_get_data(surface);
+
+    g_assert((rstride & 0x03) == 0);
+
+    // Alloc internal buffer for pixbuf
+    size = rstride * h;
+    p = (u_int32_t*)malloc(size);
+    dst = (const guchar*)p;
+    size /= 4;
+
+    // Convert cairo pixels to gdk pixbuf pixels
+    for (i = 0; i < size; ++i)
+    {
+        *p++ = cairoPixel2gdkPixel(*src++);
+    }
+
+    // Create pixbuf
+    return gdk_pixbuf_new_from_data(dst, GDK_COLORSPACE_RGB, 1, 8, w, h,
+                                    rstride, gdkPixbufFree, NULL);
+}
+
+static void drawNumberBottomLeft(cairo_surface_t *surface, unsigned int v)
+{
+    cairo_text_extents_t te;
+    cairo_t *cr;
+    char buf[4] = "99+";
+
+    if (v < 100)
+    {
+        sprintf(buf, "%u", v);
+    }
+
+    cr = cairo_create(surface);
+
+    cairo_select_font_face (cr, "Helvetica", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size (cr, 20);
+    cairo_text_extents(cr, buf, &te);
+
+    cairo_move_to(cr, 2 - te.x_bearing,
+                  cairo_image_surface_get_height(surface) - te.height - 2 - te.y_bearing);
+
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_set_line_width(cr, 3);
+    cairo_text_path(cr, buf);
+    cairo_stroke_preserve(cr);
+
+    cairo_set_source_rgb(cr, 0.2, 0.0, 1.0);
+    cairo_fill(cr);
+
+    cairo_destroy(cr);
 }
